@@ -4,6 +4,7 @@ import Phaser from 'phaser'
 import { ArrowRight, BriefcaseBusiness, MessageCircle, Play, Sparkles, X } from 'lucide-react'
 import { OfficeScene } from './game/OfficeScene'
 import { AGENT_STATE_LABELS } from './types/office'
+import { isAgentActionEvent } from './shared/agentEvent.mjs'
 import type { AgentInfo, AgentRole, AgentSelectedEvent, AgentStateChangedEvent, OfficeErrorEvent } from './types/office'
 
 const ROLE_LABELS: Record<AgentRole, string> = {
@@ -123,6 +124,7 @@ function App() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<AgentInfo | null>(null)
   const [liveLog, setLiveLog] = useState('Le studio se prépare à accueillir son équipe.')
+  const [connected, setConnected] = useState(false)
 
   useEffect(() => {
     const parent = gameContainerRef.current
@@ -198,6 +200,70 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!ready) return
+    let disposed = false
+    let socket: WebSocket | undefined
+    let retry: ReturnType<typeof setTimeout> | undefined
+    let retryDelay = 2000
+    let warned = false
+    const connect = () => {
+      const url = import.meta.env.VITE_WS_URL || `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`
+      try {
+        socket = new WebSocket(url)
+      } catch (error) {
+        console.error('Configuration WebSocket invalide :', error)
+        setLiveLog('URL WebSocket invalide : le mode local reste disponible.')
+        return
+      }
+      socket.onopen = () => {
+        if (!disposed) {
+          setConnected(true)
+          retryDelay = 2000
+          warned = false
+        }
+      }
+      socket.onmessage = (message) => {
+        try {
+          const event: unknown = JSON.parse(String(message.data))
+          if (!isAgentActionEvent(event)) {
+            console.warn('Événement WebSocket invalide', event)
+            return
+          }
+          const scene = sceneRef.current
+          if (!scene) {
+            console.warn('Événement reçu alors que la scène est indisponible', event)
+            return
+          }
+          scene.applyAgentAction(event)
+          setLiveLog(`Action externe : ${event.role} — ${event.action}.`)
+        } catch (error) {
+          console.error('Événement WebSocket impossible à traiter :', error)
+          setLiveLog('Impossible de traiter un événement WebSocket.')
+        }
+      }
+      socket.onerror = () => {
+        if (!disposed && !warned) {
+          console.warn('Connexion WebSocket indisponible.')
+          warned = true
+        }
+      }
+      socket.onclose = () => {
+        if (!disposed) {
+          setConnected(false)
+          retry = setTimeout(connect, retryDelay)
+          retryDelay = Math.min(retryDelay * 2, 30000)
+        }
+      }
+    }
+    connect()
+    return () => {
+      disposed = true
+      if (retry) clearTimeout(retry)
+      socket?.close()
+    }
+  }, [ready])
+
   function startCycle() {
     const scene = sceneRef.current
     if (!scene || cycleRunningRef.current) {
@@ -236,6 +302,7 @@ function App() {
             <div className="min-w-0">
               <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">En direct</p>
               <p role="status" aria-live="polite" className="text-sm text-slate-200">{liveLog}</p>
+              <p role="status" className="mt-1 text-xs text-slate-400">{connected ? 'Connecté' : 'Mode Hors-ligne'}</p>
             </div>
           </div>
         </header>

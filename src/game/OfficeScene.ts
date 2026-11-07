@@ -23,6 +23,7 @@ import {
   createAgentTexture,
 } from './proceduralSprites'
 import type { SpriteDirection } from './proceduralSprites'
+import type { AgentActionEvent } from '../shared/agentEvent.mjs'
 import type {
   AgentInfo,
   AgentRole,
@@ -87,6 +88,7 @@ interface AgentRuntime {
 export class OfficeScene extends Phaser.Scene {
   private readonly agents = new Map<AgentRole, AgentRuntime>()
   private readonly timers = new Set<Phaser.Time.TimerEvent>()
+  private readonly externalActions = new Map<AgentRole, Phaser.Time.TimerEvent | undefined>()
   private readonly pathfinder = new EasyStar()
   private readonly collisionGrid = createCollisionGrid()
   private cycleRunning = false
@@ -120,6 +122,7 @@ export class OfficeScene extends Phaser.Scene {
     if (this.cycleRunning) return
 
     for (const agent of this.agents.values()) {
+      if (this.externalActions.has(agent.info.role)) continue
       if (agent.info.state === 'idle' && time >= agent.nextBreakAt) {
         const destination = Phaser.Math.RND.pick([
           INTERACTION_POSITIONS.coffee,
@@ -144,6 +147,7 @@ export class OfficeScene extends Phaser.Scene {
   public simulateWorkCycle(onStepUpdate: (msg: string) => void): void {
     if (!this.sys.isActive()) throw new Error('OfficeScene is not active')
     if (this.cycleRunning) throw new Error('A work cycle is already running')
+    this.resetActivity()
     this.cycleRunning = true
 
     const manager = this.getAgent('manager')
@@ -194,6 +198,52 @@ export class OfficeScene extends Phaser.Scene {
         })
       })
     })
+  }
+
+  public applyAgentAction(event: AgentActionEvent): void {
+    if (!this.sys.isActive()) throw new Error('OfficeScene is not active')
+    if (this.cycleRunning) {
+      this.resetActivity()
+      this.cycleRunning = false
+      this.emitOfficeEvent('work-cycle-ready', undefined)
+    }
+
+    const agent = this.getAgent(event.role)
+    this.externalActions.get(event.role)?.remove()
+    this.cancelMovement(agent)
+    if (agent.info.state !== 'idle') this.setState(agent, 'idle')
+    this.externalActions.set(event.role, undefined)
+    const destination = event.action === 'break' ? INTERACTION_POSITIONS.coffee : AGENT_DESKS[event.role]
+    this.moveAgent(agent, destination, () => {
+      if (event.action === 'break') {
+        this.setState(agent, 'break')
+      } else {
+        this.setState(agent, 'idle')
+        const state = { work: 'working', test: 'testing', talk: 'talking' } as const
+        this.setState(agent, state[event.action])
+      }
+      const timer = this.time.delayedCall(4000, () => {
+        this.setState(agent, 'idle')
+        this.moveAgent(agent, AGENT_DESKS[event.role], () => {
+          this.setState(agent, 'idle')
+          this.externalActions.delete(event.role)
+          this.scheduleBreak(agent)
+        })
+      })
+      this.externalActions.set(event.role, timer)
+    })
+  }
+
+  private resetActivity(): void {
+    for (const timer of this.timers) timer.remove()
+    this.timers.clear()
+    for (const timer of this.externalActions.values()) timer?.remove()
+    this.externalActions.clear()
+    for (const agent of this.agents.values()) {
+      this.cancelMovement(agent)
+      if (agent.info.state !== 'idle') this.setState(agent, 'idle')
+      this.scheduleBreak(agent)
+    }
   }
 
   private drawOffice(): void {
@@ -369,13 +419,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private handlePathFailure(agent: AgentRuntime, destination: GridPosition): void {
-    for (const timer of this.timers) timer.remove()
-    this.timers.clear()
-    for (const member of this.agents.values()) {
-      this.cancelMovement(member)
-      if (member.info.state !== 'idle') this.setState(member, 'idle')
-      this.scheduleBreak(member)
-    }
+    this.resetActivity()
     this.cycleRunning = false
     this.emitOfficeEvent('office-error', {
       message: `Chemin introuvable pour ${agent.info.name} vers (${destination.col}, ${destination.row}).`,
@@ -425,6 +469,8 @@ export class OfficeScene extends Phaser.Scene {
   private cleanup(): void {
     for (const timer of this.timers) timer.remove()
     this.timers.clear()
+    for (const timer of this.externalActions.values()) timer?.remove()
+    this.externalActions.clear()
     for (const agent of this.agents.values()) this.cancelMovement(agent)
     this.agents.clear()
     this.cycleRunning = false
