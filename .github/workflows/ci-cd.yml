@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, master]
+  push:
+    branches: [develop, master]
+
+permissions:
+  contents: read
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run unit tests
+        run: node --test tests/officeLayout.test.mjs
+
+      - name: Build
+        run: npm run build
+
+  tag-release:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master')
+    needs: check-and-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create and push tag
+        env:
+          BRANCH: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${BRANCH}-${COMMIT_SHA:0:12}"
+          remote_ref="refs/tags/${tag}"
+          existing="$(git ls-remote --tags origin "$remote_ref")"
+          if [ -n "$existing" ]; then
+            remote_sha="${existing%%[[:space:]]*}"
+            if [ "$remote_sha" != "$COMMIT_SHA" ]; then
+              echo "::error::Existing tag $tag points to a different commit."
+              exit 1
+            fi
+            echo "Tag $tag already exists at $COMMIT_SHA."
+            exit 0
+          fi
+          git tag "$tag" "$COMMIT_SHA"
+          git push origin "$remote_ref"
