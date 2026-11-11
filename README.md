@@ -13,6 +13,9 @@ Entrez dans un bureau virtuel et observez le Manager, le Product Owner, les dév
 
 > **État du projet : prototype.** Les personnages et le cycle de travail sont simulés localement ou pilotés par des événements externes. Le chat du Manager peut être connecté à un webhook n8n ; il ne lance pas lui-même le cycle local.
 
+![First screen](./screenshots/screenshot_1.png)
+![First screen](./screenshots/screenshot_2.png)
+
 ## À quoi ça sert ?
 
 - **Visualiser le développement autrement** : suivez un cycle animé, de la demande du Manager aux tests de la QA.
@@ -127,5 +130,5 @@ Le workflow [CI](.github/workflows/ci-cd.yml) lance installation stricte, lint, 
 - [x] Recevoir des actions via un relais WebSocket.
 - [x] Connecter le chat du Manager à un webhook n8n.
 - [ ] Intégrer l'API GitHub et GitHub Projects pour suivre des tâches réelles.
-- [ ] Brancher de véritables agents multi-rôles pilotés par des LLM.
+- [ ] Branchement de véritables agents multi-rôles pilotés par des LLM.
 - [ ] Enrichir les assets et animations du bureau.
