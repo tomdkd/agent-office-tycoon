@@ -54,3 +54,10 @@ export function addRoomImage(
 ): Phaser.GameObjects.Image {
   return scene.add.image(x, y, ASSET_KEYS.room, frame)
 }
+
+export function addFloorBackground(scene: Phaser.Scene): Phaser.GameObjects.TileSprite {
+  return scene.add.tileSprite(0, 0, 1, 1, ASSET_KEYS.room, 'floor')
+    .setOrigin(0)
+    .setTileScale(2)
+    .setDepth(-1001)
+}

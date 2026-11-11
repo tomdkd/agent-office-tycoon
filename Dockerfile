@@ -4,14 +4,20 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+ARG VITE_WS_URL
+ARG VITE_MANAGER_WEBHOOK_URL
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:alpine-slim AS production
+FROM node:24-alpine AS production
 
-COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY --from=build --chown=101:101 /app/dist/ /usr/share/nginx/html/
+ENV NODE_ENV=production
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --chown=node:node server ./server
+COPY --chown=node:node src/shared/agentEvent.mjs ./src/shared/agentEvent.mjs
 
-USER 101:101
+USER node
 EXPOSE 8080
-ENTRYPOINT ["nginx"]
-CMD ["-g", "daemon off;"]
+CMD ["node", "server/index.js"]
