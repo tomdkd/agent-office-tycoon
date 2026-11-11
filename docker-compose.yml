@@ -5,6 +5,7 @@ services:
       target: production
       args:
         VITE_WS_URL: ${VITE_WS_URL:-}
+        VITE_MANAGER_WEBHOOK_URL: ${VITE_MANAGER_WEBHOOK_URL:-}
     ports:
       - "127.0.0.1:8080:8080"
     read_only: true

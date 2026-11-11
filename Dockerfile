@@ -5,6 +5,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 ARG VITE_WS_URL
+ARG VITE_MANAGER_WEBHOOK_URL
 RUN npm run build
 
 FROM node:24-alpine AS production

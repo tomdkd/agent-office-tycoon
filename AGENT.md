@@ -6,7 +6,7 @@
 - **React:** Gère le HUD, les modales et la logique de dialogue.
 
 ## 2. Rendering Rules
-- Canvas resolution: 800x600, `pixelArt: true`, scale mode `FIT`.
+- Canvas: viewport-sized, `pixelArt: true`, scale mode `RESIZE`. Keep the 800x600 office centered with a uniform camera zoom on resize.
 - NO procedural vector shapes (`graphics.fillRect` / `lineBetween`) for furniture or walls. Use PNG textures exclusively from `public/assets/Interiors/`.
 - Depth Sorting: All dynamic objects and characters must run `sprite.setDepth(sprite.y)` in `update()`.
 

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
-import { ArrowRight, BriefcaseBusiness, MessageCircle, Play, Sparkles, X } from 'lucide-react'
+import { ErrorToast } from './ErrorToast'
+import { ManagerChat } from './ManagerChat'
 import { OfficeScene } from './game/OfficeScene'
 import { AGENT_STATE_LABELS } from './types/office'
 import { isAgentActionEvent } from './shared/agentEvent.mjs'
@@ -15,106 +15,6 @@ const ROLE_LABELS: Record<AgentRole, string> = {
   qa: 'Assurance qualité',
 }
 
-interface ManagerDialogProps {
-  onClose: () => void
-  onStart: () => void
-}
-
-function ManagerDialog({ onClose, onStart }: ManagerDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
-  const [message, setMessage] = useState('')
-  const [submittedMessage, setSubmittedMessage] = useState('')
-
-  useEffect(() => {
-    const dialog = dialogRef.current
-    dialog?.showModal()
-    dialog?.querySelector('textarea')?.focus()
-    return () => dialog?.close()
-  }, [])
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const trimmed = message.trim()
-    if (trimmed) setSubmittedMessage(trimmed)
-  }
-
-  return (
-    <dialog
-      ref={dialogRef}
-      onCancel={(event) => {
-        event.preventDefault()
-        onClose()
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          event.preventDefault()
-          onClose()
-        }
-      }}
-      aria-labelledby="dialog-title"
-      className="m-auto w-[min(100%-2rem,30rem)] rounded-3xl border border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/75 backdrop:backdrop-blur-sm"
-    >
-      <div className="p-6 sm:p-8">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-rose-400/15 text-rose-300">
-              <MessageCircle size={22} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold tracking-widest text-rose-300 uppercase">Discussion</p>
-              <h2 id="dialog-title" className="mt-1 text-xl font-bold">Parler au Manager</h2>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Fermer" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400">
-            <X size={20} aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-slate-700 bg-slate-800/70 p-4 text-sm leading-6 text-slate-200">
-          <p className="mb-1 text-xs font-bold tracking-wide text-rose-300 uppercase">Manager</p>
-          {submittedMessage
-            ? 'Bien reçu ! Je vais transmettre votre demande à l’équipe. Prêt à lancer le cycle ?'
-            : 'Bonjour ! Quel projet souhaitez-vous confier à notre équipe ?'}
-        </div>
-
-        {submittedMessage ? (
-          <div className="mt-4">
-            <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">Votre demande</p>
-            <p className="mt-2 max-h-32 overflow-y-auto rounded-xl bg-slate-950/60 p-3 text-sm break-words whitespace-pre-wrap text-slate-200">{submittedMessage}</p>
-            <p className="mt-3 text-xs leading-5 text-slate-400">Réponse prédéfinie : le cycle illustre un scénario de travail et ne traite pas encore votre demande.</p>
-            <div className="mt-5 flex flex-wrap justify-end gap-3">
-              <button type="button" onClick={() => setSubmittedMessage('')} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-indigo-400">Modifier</button>
-              <button type="button" onClick={onStart} className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400">
-                Valider et lancer <ArrowRight size={16} aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="mt-5">
-            <label htmlFor="manager-message" className="text-sm font-semibold text-slate-200">Votre message</label>
-            <textarea
-              id="manager-message"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="Décrivez votre idée..."
-              maxLength={1000}
-              rows={4}
-              autoFocus
-              required
-              className="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950/70 p-3 text-sm text-white placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
-            />
-            <div className="mt-4 flex justify-end">
-              <button type="submit" disabled={!message.trim()} className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400 disabled:cursor-not-allowed disabled:opacity-50">
-                Envoyer <ArrowRight size={16} aria-hidden="true" />
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </dialog>
-  )
-}
-
 function App() {
   const gameContainerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<OfficeScene | null>(null)
@@ -125,6 +25,11 @@ function App() {
   const [selectedAgent, setSelectedAgent] = useState<AgentInfo | null>(null)
   const [liveLog, setLiveLog] = useState('Le studio se prépare à accueillir son équipe.')
   const [connected, setConnected] = useState(false)
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null)
+  const showError = useCallback((message: string) => {
+    setToast((current) => ({ id: (current?.id ?? 0) + 1, message }))
+  }, [])
+  const closeToast = useCallback(() => setToast(null), [])
 
   useEffect(() => {
     const parent = gameContainerRef.current
@@ -133,10 +38,8 @@ function App() {
     let disposed = false
     const onAgentSelected = ({ agent }: AgentSelectedEvent) => {
       if (agent.role === 'manager') {
-        if (!cycleRunningRef.current) {
-          setSelectedAgent(null)
-          setDialogOpen(true)
-        }
+        setSelectedAgent(null)
+        setDialogOpen(true)
       } else {
         setSelectedAgent(agent)
       }
@@ -172,24 +75,15 @@ function App() {
     const game = new Phaser.Game({
       type: Phaser.AUTO,
       parent,
-      width: 800,
-      height: 600,
+      width: parent.clientWidth,
+      height: parent.clientHeight,
       pixelArt: true,
-      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+      scale: { mode: Phaser.Scale.RESIZE },
       scene,
     })
 
-    // The HUD can move the canvas without a resize, invalidating Phaser's input bounds.
-    const updateCanvasBounds = () => game.scale.updateBounds()
-    parent.addEventListener('mousemove', updateCanvasBounds, true)
-    parent.addEventListener('mousedown', updateCanvasBounds, true)
-    parent.addEventListener('touchstart', updateCanvasBounds, true)
-
     return () => {
       disposed = true
-      parent.removeEventListener('mousemove', updateCanvasBounds, true)
-      parent.removeEventListener('mousedown', updateCanvasBounds, true)
-      parent.removeEventListener('touchstart', updateCanvasBounds, true)
       scene.events?.off('agent-selected', onAgentSelected)
       scene.events?.off('agent-state-changed', onAgentStateChanged)
       scene.events?.off('work-cycle-ready', onCycleReady)
@@ -275,7 +169,6 @@ function App() {
     setLiveLog('L’équipe rejoint ses postes...')
     try {
       scene.simulateWorkCycle(setLiveLog)
-      setDialogOpen(false)
     } catch (error) {
       cycleRunningRef.current = false
       setCycleRunning(false)
@@ -284,64 +177,40 @@ function App() {
     }
   }
 
-  const controlsDisabled = !ready || cycleRunning
-
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-5 sm:px-8 sm:py-8">
-        <header className="flex flex-col gap-5 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"><BriefcaseBusiness size={21} aria-hidden="true" /></div>
-            <div>
-              <p className="text-xs font-bold tracking-[0.2em] text-indigo-300 uppercase">Votre studio virtuel</p>
-              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">AI Office Tycoon</h1>
-            </div>
-          </div>
-          <div className="flex min-w-0 items-center gap-3 rounded-xl border border-white/10 bg-slate-900 px-4 py-3 sm:max-w-md">
-            <span className="relative flex size-2.5 shrink-0"><span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-40" /><span className="relative size-2.5 rounded-full bg-emerald-400" /></span>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">En direct</p>
-              <p role="status" aria-live="polite" className="text-sm text-slate-200">{liveLog}</p>
-              <p role="status" className="mt-1 text-xs text-slate-400">{connected ? 'Connecté' : 'Mode Hors-ligne'}</p>
-            </div>
-          </div>
-        </header>
+    <main className="relative h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
+      <div ref={gameContainerRef} className="fixed inset-0 h-full w-full" aria-label="Bureau interactif : sélectionnez un agent pour obtenir des informations ou parler au Manager." />
 
-        <section aria-label="Bureau virtuel" className="flex flex-1 flex-col items-center justify-center py-7">
-          <div className="mb-4 flex w-full max-w-[800px] items-center justify-between gap-4">
-            <div><p className="text-xs font-bold tracking-[0.18em] text-indigo-300 uppercase">Vue du studio</p><h2 className="mt-1 text-lg font-semibold">La vie au bureau</h2></div>
-            <span className="rounded-full border border-white/10 bg-slate-900 px-3 py-1 text-xs font-medium text-slate-400">5 agents</span>
-          </div>
-          <div className="w-full max-w-[800px] overflow-hidden rounded-xl border-4 border-slate-800 bg-slate-800 shadow-2xl shadow-black/30">
-            <div ref={gameContainerRef} className="aspect-[4/3] w-full" aria-label="Bureau interactif : sélectionnez un agent pour obtenir des informations ou parler au Manager." />
-          </div>
-          <p className="mt-3 text-center text-xs text-slate-500">Astuce : cliquez sur un agent pour découvrir son rôle et son statut, ou sur le Manager pour lui parler.</p>
-          {selectedAgent && (
-            <aside aria-label="Informations sur l’agent" className="mt-4 w-full max-w-[800px] rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-lg">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span aria-hidden="true" className="size-3 shrink-0 rounded-sm" style={{ backgroundColor: `#${selectedAgent.color.toString(16).padStart(6, '0')}` }} />
-                  <div>
-                    <h3 className="font-semibold">{selectedAgent.name}</h3>
-                    <p className="mt-1 text-sm text-slate-400">Rôle : {ROLE_LABELS[selectedAgent.role]}</p>
-                    <p aria-live="polite" className="mt-1 text-sm text-slate-200">Statut : {AGENT_STATE_LABELS[selectedAgent.state]}</p>
-                  </div>
-                </div>
-                <button type="button" onClick={() => setSelectedAgent(null)} aria-label="Fermer la carte de l’agent" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400"><X size={18} aria-hidden="true" /></button>
-              </div>
-            </aside>
-          )}
-        </section>
+      <header className="pointer-events-none fixed inset-x-3 top-3 z-10 flex items-start justify-between gap-2 sm:inset-x-6 sm:top-6">
+        <div className="pixel-panel pointer-events-auto flex items-center gap-3 p-2 sm:p-3">
+          <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center border-2 border-[#29303a] bg-[#c87355] text-2xl text-[#fff3ce]">▣</span>
+          <div><p className="hidden text-lg leading-none text-[#92513c] sm:block">Votre studio virtuel</p><h1 className="pixel-title max-w-36 text-[9px] leading-4 sm:max-w-none sm:text-[11px]">AI Office Tycoon</h1></div>
+        </div>
+        <div className="pixel-panel pointer-events-auto max-w-[50%] px-3 py-1 sm:max-w-sm">
+          <p role="status" aria-live="polite" className="text-lg leading-5 sm:text-xl">{liveLog}</p>
+          <p role="status" className="text-lg leading-5 text-[#92513c]"><span aria-hidden="true">{connected ? '■ ' : '□ '}</span>{connected ? 'Connecté' : 'Mode Hors-ligne'}</p>
+        </div>
+      </header>
 
-        <footer className="flex flex-col gap-4 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <div><p className="flex items-center gap-2 text-sm font-semibold"><Sparkles size={16} className="text-amber-300" aria-hidden="true" /> À vous de décider</p><p className="mt-1 text-xs text-slate-400">Donnez une idée à l’équipe ou lancez une simulation.</p></div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button type="button" disabled={controlsDisabled} onClick={() => { setSelectedAgent(null); setDialogOpen(true) }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"><MessageCircle size={17} aria-hidden="true" /> Parler au Manager</button>
-            <button type="button" disabled={controlsDisabled} onClick={startCycle} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 hover:bg-indigo-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"><Play size={17} fill="currentColor" aria-hidden="true" /> Simuler un Cycle Complet</button>
+      {selectedAgent && (
+        <aside aria-label="Informations sur l’agent" className="pixel-panel fixed top-24 left-3 z-20 w-[min(20rem,calc(100vw-1.5rem))] p-4 sm:left-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span aria-hidden="true" className="size-4 shrink-0 border-2 border-[#29303a]" style={{ backgroundColor: `#${selectedAgent.color.toString(16).padStart(6, '0')}` }} />
+              <div><h2 className="pixel-title text-[10px] leading-5">{selectedAgent.name}</h2><p className="mt-1 text-xl leading-5">Rôle : {ROLE_LABELS[selectedAgent.role]}</p><p aria-live="polite" className="mt-1 text-xl leading-5">Statut : {AGENT_STATE_LABELS[selectedAgent.state]}</p></div>
+            </div>
+            <button type="button" onClick={() => setSelectedAgent(null)} aria-label="Fermer la carte de l’agent" className="pixel-icon-button size-8 shrink-0 text-2xl leading-none"><span aria-hidden="true">×</span></button>
           </div>
-        </footer>
+        </aside>
+      )}
+
+      <div className="fixed bottom-3 left-3 z-20 flex max-w-[calc(100vw-1.5rem)] flex-wrap gap-2 sm:bottom-6 sm:left-6">
+        <button type="button" disabled={!ready} onClick={() => { setSelectedAgent(null); setDialogOpen(true) }} className="pixel-button inline-flex items-center gap-2 px-3 py-2 text-xl leading-5"><span aria-hidden="true">▣</span> Parler au Manager</button>
+        <button type="button" disabled={!ready || cycleRunning} onClick={startCycle} className="pixel-button inline-flex items-center gap-2 px-3 py-2 text-xl leading-5"><span aria-hidden="true">▶</span> Simuler un Cycle Complet</button>
       </div>
-      {dialogOpen && <ManagerDialog onClose={() => setDialogOpen(false)} onStart={startCycle} />}
+
+      <ManagerChat open={dialogOpen} onClose={() => setDialogOpen(false)} onError={showError} />
+      {toast && <ErrorToast key={toast.id} message={toast.message} onClose={closeToast} />}
     </main>
   )
 }

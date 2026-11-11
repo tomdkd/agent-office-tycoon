@@ -15,7 +15,7 @@ import {
   TILE_SIZE,
 } from './officeLayout'
 import type { Furniture, GridPosition } from './officeLayout'
-import { addOfficeImage, addRoomImage, prepareOfficeTextures, preloadOfficeTextures } from './officeTextures'
+import { addFloorBackground, addOfficeImage, addRoomImage, prepareOfficeTextures, preloadOfficeTextures } from './officeTextures'
 import {
   AGENT_CLOTHING_COLORS,
   SPRITE_DIRECTIONS,
@@ -91,6 +91,7 @@ export class OfficeScene extends Phaser.Scene {
   private readonly externalActions = new Map<AgentRole, Phaser.Time.TimerEvent | undefined>()
   private readonly pathfinder = new EasyStar()
   private readonly collisionGrid = createCollisionGrid()
+  private floorBackground!: Phaser.GameObjects.TileSprite
   private cycleRunning = false
 
   constructor() {
@@ -107,12 +108,30 @@ export class OfficeScene extends Phaser.Scene {
     this.pathfinder.enableSync()
     this.pathfinder.setIterationsPerCalculation(GRID_COLS * GRID_ROWS * 4)
     prepareOfficeTextures(this)
+    this.floorBackground = addFloorBackground(this)
     this.drawOffice()
     for (const definition of AGENTS) {
       this.createAgentAnimations(definition.role)
       this.createAgent(definition)
     }
+    this.resizeCamera(this.scale.gameSize)
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.resizeCamera, this)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this)
+  }
+
+  private resizeCamera(size: Phaser.Structs.Size): void {
+    const zoom = Math.min(size.width / 800, size.height / 600)
+    this.cameras.main.setZoom(zoom)
+    this.cameras.main.centerOn(400, 300)
+    const left = 400 - size.width / zoom / 2
+    const top = 300 - size.height / zoom / 2
+    const x = GRID_ORIGIN.x + Math.floor((left - GRID_ORIGIN.x) / TILE_SIZE) * TILE_SIZE
+    const y = GRID_ORIGIN.y + Math.floor((top - GRID_ORIGIN.y) / TILE_SIZE) * TILE_SIZE
+    this.floorBackground.setPosition(x, y)
+    this.floorBackground.setSize(
+      Math.ceil((400 + size.width / zoom / 2 - x) / TILE_SIZE) * TILE_SIZE,
+      Math.ceil((300 + size.height / zoom / 2 - y) / TILE_SIZE) * TILE_SIZE,
+    )
   }
 
   update(time: number): void {
@@ -467,6 +486,7 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private cleanup(): void {
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.resizeCamera, this)
     for (const timer of this.timers) timer.remove()
     this.timers.clear()
     for (const timer of this.externalActions.values()) timer?.remove()
